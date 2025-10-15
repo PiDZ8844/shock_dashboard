@@ -1,0 +1,12 @@
+as_of,indicator,value,unit,status,comment
+2025-10-15 19:39 CEST,Yield Curve (10Y-2Y),0.5299999999999998,%,green,"Positive = normal, negative = inversion"
+2025-10-15 19:39 CEST,US Dollar Index (DXY),98.802001953125,,green,Starker USD belastet Risikoassets
+2025-10-15 19:39 CEST,UST 10Y Yield,4.05,%,yellow,Hohe Renditen drücken Bewertungen
+2025-10-15 19:39 CEST,UST 30Y Yield,4.63,%,orange,Langfristvertrauen / Duration-Risiko
+2025-10-15 19:39 CEST,VIX (S&P 500 Volatility),21.739999771118164,,yellow,Angstbarometer
+2025-10-15 19:39 CEST,US High Yield Spread,3.11,%,green,Kreditstress
+2025-10-15 19:39 CEST,Reverse Repo ($bn),3.516,bn,red,Liquiditätsparkplatz; starker Rückgang = Abzug
+2025-10-15 19:39 CEST,S&P 500 Structure (MA50 vs MA200),492.39599365234426,pts,green,Death Cross < 0
+2025-10-15 19:39 CEST,WTI Crude Oil,58.31999969482422,USD/bbl,green,Inflations-/Geopolitik-Barometer
+2025-10-15 19:39 CEST,Gold Futures (GC=F),4199.89990234375,USD/oz,red,Safe haven proxy
+2025-10-15 19:39 CEST,Silver Futures (SI=F),51.36000061035156,USD/oz,red,Industrial+safe haven

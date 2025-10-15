@@ -1,0 +1,55 @@
+thresholds:
+  yield_curve:
+    red_lt: -0.1
+    orange_lt: 0.0
+    yellow_lt: 0.3
+  dxy:
+    red_gt: 110
+    orange_gt: 108
+    yellow_gt: 105
+  ust10:
+    red_gt: 5.0
+    orange_gt: 4.5
+    yellow_gt: 4.0
+  ust30:
+    red_gt: 5.0
+    orange_gt: 4.5
+    yellow_gt: 4.0
+  vix:
+    red_gt: 35
+    orange_gt: 25
+    yellow_gt: 20
+  hy_spread:
+    red_gt: 6.0
+    orange_gt: 5.0
+    yellow_gt: 4.0
+  reverse_repo:
+    red_lt: 200
+    orange_lt: 400
+    yellow_lt: 700
+  spx_ma_cross:
+    red_lt: 0.0
+    orange_lt: 50.0
+    yellow_lt: 150.0
+  wti:
+    red_gt: 110
+    orange_gt: 95
+    yellow_gt: 85
+  gold:
+    red_gt: 2700
+    orange_gt: 2500
+    yellow_gt: 2300
+  silver:
+    red_gt: 32
+    orange_gt: 28
+    yellow_gt: 25
+
+weights:
+  bonds: 0.25
+  fx: 0.15
+  vol: 0.10
+  credit: 0.15
+  liquidity: 0.10
+  equity: 0.10
+  commod: 0.10
+  alts: 0.05

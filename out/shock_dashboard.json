@@ -1,0 +1,93 @@
+{
+  "as_of": "2025-10-15 19:39 CEST",
+  "total_score": 30.42,
+  "score_parts": {
+    "bonds": 0.10416666666666667,
+    "fx": 0.0,
+    "vol": 0.05,
+    "credit": 0.0,
+    "liquidity": 0.1,
+    "equity": 0.0,
+    "commod": 0.0,
+    "alts": 0.05
+  },
+  "indicators": [
+    {
+      "name": "Yield Curve (10Y-2Y)",
+      "value": 0.5299999999999998,
+      "unit": "%",
+      "comment": "Positive = normal, negative = inversion",
+      "status": "green"
+    },
+    {
+      "name": "US Dollar Index (DXY)",
+      "value": 98.802001953125,
+      "unit": "",
+      "comment": "Starker USD belastet Risikoassets",
+      "status": "green"
+    },
+    {
+      "name": "UST 10Y Yield",
+      "value": 4.05,
+      "unit": "%",
+      "comment": "Hohe Renditen drücken Bewertungen",
+      "status": "yellow"
+    },
+    {
+      "name": "UST 30Y Yield",
+      "value": 4.63,
+      "unit": "%",
+      "comment": "Langfristvertrauen / Duration-Risiko",
+      "status": "orange"
+    },
+    {
+      "name": "VIX (S&P 500 Volatility)",
+      "value": 21.739999771118164,
+      "unit": "",
+      "comment": "Angstbarometer",
+      "status": "yellow"
+    },
+    {
+      "name": "US High Yield Spread",
+      "value": 3.11,
+      "unit": "%",
+      "comment": "Kreditstress",
+      "status": "green"
+    },
+    {
+      "name": "Reverse Repo ($bn)",
+      "value": 3.516,
+      "unit": "bn",
+      "comment": "Liquiditätsparkplatz; starker Rückgang = Abzug",
+      "status": "red"
+    },
+    {
+      "name": "S&P 500 Structure (MA50 vs MA200)",
+      "value": 492.39599365234426,
+      "unit": "pts",
+      "comment": "Death Cross < 0",
+      "status": "green"
+    },
+    {
+      "name": "WTI Crude Oil",
+      "value": 58.31999969482422,
+      "unit": "USD/bbl",
+      "comment": "Inflations-/Geopolitik-Barometer",
+      "status": "green"
+    },
+    {
+      "name": "Gold Futures (GC=F)",
+      "value": 4199.89990234375,
+      "unit": "USD/oz",
+      "comment": "Safe haven proxy",
+      "status": "red"
+    },
+    {
+      "name": "Silver Futures (SI=F)",
+      "value": 51.36000061035156,
+      "unit": "USD/oz",
+      "comment": "Industrial+safe haven",
+      "status": "red"
+    }
+  ]
+}
