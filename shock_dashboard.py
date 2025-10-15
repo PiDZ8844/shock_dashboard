@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 """
-PIEN'S MACRO SHOCK DASHBOARD (Python)
--------------------------------------
-Fetches macro indicators, computes a "Shock Score", and writes a daily report.
-- Designed to be robust: uses online sources if possible; falls back to local values if not.
-- Configure thresholds/weights in config.yaml.
-- Run:  python shock_dashboard.py --out out/ --use-fred --use-yf
-Author: ChatGPT (for Pien)
+Shock Dashboard (9 Indikatoren) – robust & deutsch
+- FRED (FRED_API_KEY aus Umgebung), Yahoo Finance (ohne Key)
+- Europe/Berlin Zeitzone
+- 2 Nachkommastellen Anzeige, "error" bei fehlenden Werten
+- Emoji-Farben: 🟢🟡🟠🔴 (⚪️ = unbekannt/Fehler)
+- ShockScore 0..100 (0 = gut, 100 = maximaler Stress)
+- Output: out/shock_dashboard.md & out/shock_dashboard.json
 """
 
 import os
-import sys
-import argparse
 import json
-import yaml
+import math
+import argparse
 from dataclasses import dataclass, asdict
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+# optionale Abhängigkeiten
 try:
     import requests
 except Exception:
@@ -30,295 +31,378 @@ try:
 except Exception:
     yf = None
 
-def pct(x):
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
+# ----------------- Hilfsfunktionen -----------------
+
+def r2(x: Any) -> Any:
+    """Rundet Zahlen auf 2 Nachkommastellen. Strings (inkl. 'error') bleiben erhalten."""
     try:
-        return f"{float(x):.2f}%"
+        if x is None:
+            return None
+        if isinstance(x, str):
+            return x
+        return round(float(x), 2)
+    except Exception:
+        return x
+
+def fmt2(x: Any, unit: str = "") -> str:
+    """Formatiert für Anzeige; 'error' bleibt 'error'."""
+    if x is None:
+        return "-"
+    if isinstance(x, str) and x.strip().lower() == "error":
+        return "error"
+    try:
+        return f"{float(x):.2f}{unit}"
     except Exception:
         return str(x)
 
-def load_yaml(path: str) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+def status_emoji(status: str) -> str:
+    return {
+        "green": "🟢",
+        "yellow": "🟡",
+        "orange": "🟠",
+        "red": "🔴",
+        "gray": "⚪️",
+    }.get(status, "⚪️")
 
-def ensure_dir(p: str):
-    os.makedirs(p, exist_ok=True)
+def ensure_dir(path: str) -> None:
+    os.makedirs(path, exist_ok=True)
 
-def read_local_fallback(path: str) -> Dict[str, Any]:
-    if not os.path.exists(path):
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+# ----------------- Fetcher -----------------
 
-def fetch_fred_series(series_id: str, api_key: Optional[str]=None) -> Optional[float]:
-    if requests is None:
+def fetch_fred_latest(series_id: str, api_key: Optional[str]) -> Optional[float]:
+    """Holt den letzten FRED-Wert als float (oder None)."""
+    if requests is None or not api_key:
         return None
-    key = api_key or os.environ.get("FRED_API_KEY", "")
     try:
-        url = "https://api.stlouisfed.org/fred/series/observations"
-        params = {
-            "series_id": series_id,
-            "api_key": key,
-            "file_type": "json",
-            "sort_order": "desc",
-            "limit": 1
-        }
-        r = requests.get(url, params=params, timeout=10)
-        r.raise_for_status()
-        data = r.json()
+        url = (
+            "https://api.stlouisfed.org/fred/series/observations"
+            f"?series_id={series_id}&api_key={api_key}&file_type=json&sort_order=desc&limit=1"
+        )
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
         obs = data.get("observations", [])
-        if not obs: return None
-        val = obs[0].get("value", None)
-        if val in (".", "", None): return None
-        return float(val)
+        if not obs:
+            return None
+        v = obs[0].get("value")
+        if v in (None, ".", ""):
+            return None
+        return float(v)
     except Exception:
         return None
 
-def fetch_yfinance_last(symbol: str) -> Optional[float]:
+def fetch_yf_last(symbol: str) -> Optional[float]:
+    """Holt den letzten Daily-Schlusskurs (robust über 5d Historie)."""
     if yf is None:
         return None
     try:
-        t = yf.Ticker(symbol)
-        data = t.history(period="5d", interval="1d")
-        if data is None or data.empty: return None
-        return float(data["Close"].iloc[-1])
+        hist = yf.Ticker(symbol).history(period="5d", interval="1d", auto_adjust=True)
+        if hist is None or hist.empty:
+            return None
+        return float(hist["Close"].iloc[-1])
     except Exception:
         return None
 
-def fetch_yfinance_ma(symbol: str, window: int) -> Optional[float]:
+def fetch_yf_ma(symbol: str, window: int) -> Optional[float]:
+    """Einfache Gleitender Durchschnitt."""
     if yf is None:
         return None
     try:
-        t = yf.Ticker(symbol)
-        data = t.history(period="1y", interval="1d")
-        if data is None or data.empty: return None
-        ma = data["Close"].rolling(window=window).mean().iloc[-1]
-        return float(ma)
+        period = "500d" if window >= 200 else "200d"
+        hist = yf.Ticker(symbol).history(period=period, interval="1d", auto_adjust=True)
+        if hist is None or hist.empty:
+            return None
+        s = hist["Close"].dropna()
+        if len(s) < window:
+            return None
+        return float(s.rolling(window).mean().iloc[-1])
     except Exception:
         return None
 
-from dataclasses import dataclass
+# ----------------- Schwellen & Klassifikation -----------------
+
+DEFAULT_CFG: Dict[str, Dict[str, float]] = {
+    "thresholds": {
+        # 1) Yield Curve (10Y-2Y), höher ist besser
+        "yc_10y2y": {"green": 0.30, "yellow": 0.00, "orange": -0.30},
+        # 2) DXY, höher ist schlechter
+        "dxy": {"green": 102.0, "yellow": 106.0, "orange": 110.0},
+        # 3) UST10, höher ist schlechter
+        "ust10": {"green": 3.50, "yellow": 4.50, "orange": 5.00},
+        # 4) VIX, höher ist schlechter
+        "vix": {"green": 20.0, "yellow": 25.0, "orange": 35.0},
+        # 5) HY OAS (%), höher ist schlechter
+        "hy_oas": {"green": 4.0, "yellow": 6.0, "orange": 8.0},
+        # 6) Reverse Repo ($bn), niedriger ist schlechter (Interpretation tricky)
+        "rrp": {"green": 100.0, "yellow": 10.0, "orange": 0.0},
+        # 7) SPX MA50-MA200 (pts), höher ist besser (Death Cross < 0)
+        "spx_ma": {"green": 0.0, "yellow": -50.0, "orange": -150.0},
+        # 8) WTI, höher ist schlechter (Inflationsdruck)
+        "wti": {"green": 60.0, "yellow": 100.0, "orange": 120.0},
+        # 9) Gold, höher ist eher Risk-Off/Stress
+        "gold": {"green": 2200.0, "yellow": 2800.0, "orange": 3200.0},
+    }
+}
+
+def th(cfg: Dict[str, Any], name: str) -> Dict[str, float]:
+    """Sicherer Zugriff auf thresholds, fällt auf Defaults zurück."""
+    try:
+        thresholds = (cfg or {}).get("thresholds", {}) or {}
+        got = thresholds.get(name)
+        if isinstance(got, dict):
+            return got
+        return DEFAULT_CFG["thresholds"][name]
+    except Exception:
+        return DEFAULT_CFG["thresholds"].get(name, {})
+
+def classify(value: Any, limits: Dict[str, float], *, higher_is_worse: bool) -> str:
+    """Mappt einen Wert auf Status. Nicht-numerisch → 'gray'."""
+    try:
+        v = float(value)
+    except Exception:
+        return "gray"
+
+    g = limits.get("green")
+    y = limits.get("yellow")
+    o = limits.get("orange")
+
+    if higher_is_worse:
+        # kleiner besser
+        if v < g:
+            return "green"
+        if v < y:
+            return "yellow"
+        if v < o:
+            return "orange"
+        return "red"
+    else:
+        # größer besser
+        if v >= g:
+            return "green"
+        if v >= y:
+            return "yellow"
+        if v >= o:
+            return "orange"
+        return "red"
+
+def status_to_score(status: str) -> float:
+    """Status → 0..1 (0 gut, 1 schlecht)."""
+    return {
+        "green": 0.2,
+        "yellow": 0.5,
+        "orange": 0.8,
+        "red": 1.0,
+        "gray": 0.6,
+    }.get(status, 0.6)
+
+# ----------------- Datentyp -----------------
 
 @dataclass
 class Indicator:
     name: str
-    value: Optional[float]
+    value: Any
     unit: str
     comment: str
-    status: str  # "green", "yellow", "orange", "red"
+    status: str
 
-def classify(value: Optional[float], rules: Dict[str, Any], default_status="yellow") -> str:
-    if value is None:
-        return default_status
-    try:
-        if "red_gt" in rules and value > rules["red_gt"]: return "red"
-        if "red_lt" in rules and value < rules["red_lt"]: return "red"
-        if "orange_gt" in rules and value > rules["orange_gt"]: return "orange"
-        if "orange_lt" in rules and value < rules["orange_lt"]: return "orange"
-        if "yellow_gt" in rules and value > rules["yellow_gt"]: return "yellow"
-        if "yellow_lt" in rules and value < rules["yellow_lt"]: return "yellow"
-        return "green"
-    except Exception:
-        return default_status
+# ----------------- Build Indikatoren -----------------
 
-def build_indicators(cfg: Dict[str, Any], use_fred: bool, use_yf: bool, fallback_vals: Dict[str, Any]) -> List[Indicator]:
-    ind = []
+def build_indicators(use_fred: bool, use_yf: bool, cfg: Dict[str, Any]) -> List[Indicator]:
+    fred_key = os.getenv("FRED_API_KEY")
+    ind: List[Indicator] = []
 
-    # 1) Yield Curve (10Y - 2Y)
-    yc_val = None
-    if use_fred:
-        dgs10 = fetch_fred_series("DGS10", api_key=os.environ.get("FRED_API_KEY"))
-        dgs2 = fetch_fred_series("DGS2", api_key=os.environ.get("FRED_API_KEY"))
-        if dgs10 is not None and dgs2 is not None:
-            yc_val = dgs10 - dgs2
-    if yc_val is None:
-        yc_val = fallback_vals.get("yield_curve_spread", 0.5)
-    yc_status = classify(yc_val, cfg["thresholds"]["yield_curve"])
-    ind.append(Indicator("Yield Curve (10Y-2Y)", yc_val, "%", "Positive = normal, negative = inversion", yc_status))
+    # 1) Yield Curve (10Y–2Y) – FRED T10Y2Y
+    yc = fetch_fred_latest("T10Y2Y", fred_key) if use_fred else None
+    yc_val = "error" if yc is None else r2(yc)
+    yc_status = classify(yc_val, th(cfg, "yc_10y2y"), higher_is_worse=False)
+    ind.append(Indicator("Yield Curve (10Y–2Y)", yc_val, "%", "Positive = normal, negative = inversion", yc_status))
 
-    # 2) DXY
-    dxy_val = None
-    if use_yf:
-        dxy_val = fetch_yfinance_last("DX-Y.NYB") or fetch_yfinance_last("DXY")
-    if dxy_val is None:
-        dxy_val = fallback_vals.get("dxy", 108.0)
-    dxy_status = classify(dxy_val, cfg["thresholds"]["dxy"])
+    # 2) DXY – Yahoo
+    dxy = fetch_yf_last("^DXY") if use_yf else None
+    if dxy is None and use_yf:
+        dxy = fetch_yf_last("DX-Y.NYB")
+    dxy_val = "error" if dxy is None else r2(dxy)
+    dxy_status = classify(dxy_val, th(cfg, "dxy"), higher_is_worse=True)
     ind.append(Indicator("US Dollar Index (DXY)", dxy_val, "", "Starker USD belastet Risikoassets", dxy_status))
 
-    # 3) UST 10Y
-    ust10 = None
-    if use_fred:
-        ust10 = fetch_fred_series("DGS10", api_key=os.environ.get("FRED_API_KEY"))
-    if ust10 is None:
-        ust10 = fallback_vals.get("ust10", 5.0)
-    ust10_status = classify(ust10, cfg["thresholds"]["ust10"])
-    ind.append(Indicator("UST 10Y Yield", ust10, "%", "Hohe Renditen drücken Bewertungen", ust10_status))
+    # 3) UST 10Y – FRED DGS10
+    ust10 = fetch_fred_latest("DGS10", fred_key) if use_fred else None
+    ust10_val = "error" if ust10 is None else r2(ust10)
+    ust10_status = classify(ust10_val, th(cfg, "ust10"), higher_is_worse=True)
+    ind.append(Indicator("UST 10Y Yield", ust10_val, "%", "Hohe Renditen drücken Bewertungen", ust10_status))
 
-    # 4) UST 30Y
-    ust30 = None
-    if use_fred:
-        ust30 = fetch_fred_series("DGS30", api_key=os.environ.get("FRED_API_KEY"))
-    if ust30 is None:
-        ust30 = fallback_vals.get("ust30", 5.1)
-    ust30_status = classify(ust30, cfg["thresholds"]["ust30"])
-    ind.append(Indicator("UST 30Y Yield", ust30, "%", "Langfristvertrauen / Duration-Risiko", ust30_status))
-
-    # 5) VIX
-    vix_val = None
-    if use_yf:
-        vix_val = fetch_yfinance_last("^VIX")
-    if vix_val is None:
-        vix_val = fallback_vals.get("vix", 28.0)
-    vix_status = classify(vix_val, cfg["thresholds"]["vix"])
+    # 4) VIX – Yahoo
+    vix = fetch_yf_last("^VIX") if use_yf else None
+    vix_val = "error" if vix is None else r2(vix)
+    vix_status = classify(vix_val, th(cfg, "vix"), higher_is_worse=True)
     ind.append(Indicator("VIX (S&P 500 Volatility)", vix_val, "", "Angstbarometer", vix_status))
 
-    # 6) HY Spreads
-    hy_spread = None
-    if use_fred:
-        hy_spread = fetch_fred_series("BAMLH0A0HYM2", api_key=os.environ.get("FRED_API_KEY"))
-    if hy_spread is None:
-        hy_spread = fallback_vals.get("hy_spread", 4.8)
-    hy_status = classify(hy_spread, cfg["thresholds"]["hy_spread"])
-    ind.append(Indicator("US High Yield Spread", hy_spread, "%", "Kreditstress", hy_status))
+    # 5) HY OAS – FRED BAMLH0A0HYM2
+    hy = fetch_fred_latest("BAMLH0A0HYM2", fred_key) if use_fred else None
+    hy_val = "error" if hy is None else r2(hy)
+    hy_status = classify(hy_val, th(cfg, "hy_oas"), higher_is_worse=True)
+    ind.append(Indicator("US High Yield Spread", hy_val, "%", "Kreditstress", hy_status))
 
-    # 7) Reverse Repo proxy
-    rrp = None
-    if use_fred:
-        rrp = fetch_fred_series("RRPONTSYD", api_key=os.environ.get("FRED_API_KEY"))
+    # 6) Reverse Repo – FRED RRPONTSYD (Million → bn Heuristik)
+    rrp = fetch_fred_latest("RRPONTSYD", fred_key) if use_fred else None
     if rrp is None:
-        rrp = fallback_vals.get("reverse_repo", 400.0)
-    rrp_status = classify(rrp, cfg["thresholds"]["reverse_repo"])
-    ind.append(Indicator("Reverse Repo ($bn)", rrp, "bn", "Liquiditätsparkplatz; starker Rückgang = Abzug", rrp_status))
+        rrp_val = "error"
+    else:
+        rrp_val = r2(rrp / 1000.0 if rrp > 1000 else rrp)
+    rrp_status = classify(rrp_val, th(cfg, "rrp"), higher_is_worse=False)
+    ind.append(Indicator("Reverse Repo ($bn)", rrp_val, "bn", "Liquiditätsparkplatz; starker Rückgang = Abzug", rrp_status))
 
-    # 8) S&P 500 MA structure
-    ma50 = None; ma200 = None
-    if use_yf:
-        ma50 = fetch_yfinance_ma("^GSPC", 50)
-        ma200 = fetch_yfinance_ma("^GSPC", 200)
+    # 7) SPX Struktur (MA50–MA200) – Yahoo
+    ma50 = fetch_yf_ma("^GSPC", 50) if use_yf else None
+    ma200 = fetch_yf_ma("^GSPC", 200) if use_yf else None
     if ma50 is None or ma200 is None:
-        ma50 = fallback_vals.get("spx_ma50", 5200.0)
-        ma200 = fallback_vals.get("spx_ma200", 5000.0)
-    diff = float(ma50 - ma200)
-    spx_status = classify(diff, cfg["thresholds"]["spx_ma_cross"])
-    ind.append(Indicator("S&P 500 Structure (MA50 vs MA200)", diff, "pts", "Death Cross < 0", spx_status))
+        spx_diff = "error"
+        spx_status = "gray"
+    else:
+        spx_diff = r2(ma50 - ma200)
+        spx_status = classify(spx_diff, th(cfg, "spx_ma"), higher_is_worse=False)
+    ind.append(Indicator("S&P 500 Structure (MA50 vs MA200)", spx_diff, "pts", "Death Cross < 0", spx_status))
 
-    # 9) Oil (WTI)
-    wti = None
-    if use_yf:
-        wti = fetch_yfinance_last("CL=F")
-    if wti is None:
-        wti = fallback_vals.get("wti", 94.0)
-    wti_status = classify(wti, cfg["thresholds"]["wti"])
-    ind.append(Indicator("WTI Crude Oil", wti, "USD/bbl", "Inflations-/Geopolitik-Barometer", wti_status))
+    # 8) WTI – Yahoo
+    wti = fetch_yf_last("CL=F") if use_yf else None
+    wti_val = "error" if wti is None else r2(wti)
+    wti_status = classify(wti_val, th(cfg, "wti"), higher_is_worse=True)
+    ind.append(Indicator("WTI Crude Oil", wti_val, "USD/bbl", "Inflations-/Geopolitik-Barometer", wti_status))
 
-    # 10) Gold & Silver
-    gold = None; silver = None
-    if use_yf:
-        gold = fetch_yfinance_last("GC=F")
-        silver = fetch_yfinance_last("SI=F")
-    if gold is None: gold = fallback_vals.get("gold", 2560.0)
-    if silver is None: silver = fallback_vals.get("silver", 28.0)
-    gold_status = classify(gold, cfg["thresholds"]["gold"])
-    silver_status = classify(silver, cfg["thresholds"]["silver"])
-    ind.append(Indicator("Gold Futures (GC=F)", gold, "USD/oz", "Safe haven proxy", gold_status))
-    ind.append(Indicator("Silver Futures (SI=F)", silver, "USD/oz", "Industrial+safe haven", silver_status))
+    # 9) Gold – Yahoo
+    gold = fetch_yf_last("GC=F") if use_yf else None
+    gold_val = "error" if gold is None else r2(gold)
+    gold_status = classify(gold_val, th(cfg, "gold"), higher_is_worse=True)
+    ind.append(Indicator("Gold Futures (GC=F)", gold_val, "USD/oz", "Safe haven proxy", gold_status))
 
     return ind
 
-def compute_shock_score(indicators, cfg):
-    weights = cfg["weights"]
-    buckets = {
-        "Yield Curve (10Y-2Y)": "bonds",
-        "UST 10Y Yield": "bonds",
-        "UST 30Y Yield": "bonds",
-        "US Dollar Index (DXY)": "fx",
-        "VIX (S&P 500 Volatility)": "vol",
-        "US High Yield Spread": "credit",
-        "Reverse Repo ($bn)": "liquidity",
-        "S&P 500 Structure (MA50 vs MA200)": "equity",
-        "WTI Crude Oil": "commod",
-        "Gold Futures (GC=F)": "alts",
-        "Silver Futures (SI=F)": "alts",
-    }
-    bucket_vals = {k: [] for k in weights.keys()}
-    for i in indicators:
-        b = buckets.get(i.name)
-        if b in bucket_vals:
-            # map status to score 0-1
-            s = {"green":0.0, "yellow":0.5, "orange":0.75, "red":1.0}.get(i.status, 0.5)
-            bucket_vals[b].append(s)
-    parts = {}
-    total = 0.0
-    for b, arr in bucket_vals.items():
-        if not arr: 
-            continue
-        avg = sum(arr)/len(arr)
-        part = avg * weights[b]
-        parts[b] = part
-        total += part
-    total_score = round(total * 100, 2)
-    return total_score, parts
+# ----------------- ShockScore -----------------
 
-def status_emoji(status: str) -> str:
-    return {"green":"🟢", "yellow":"🟡", "orange":"🟠", "red":"🔴"}.get(status, "🟡")
+def compute_shock_score(indicators: List[Indicator]) -> Tuple[float, Dict[str, float]]:
+    """
+    Hedge-Fonds-Gewichtung pro Indikator (Summe = 1.00).
+    Status (green/yellow/orange/red/gray) -> 0..1 über status_to_score().
+    Gesamt-Score = Summe( Gewicht_i * 100 * StatusScore_i ).
+    parts liefert die Einzelbeiträge je Indikator (0..100, gewichtet).
+    """
+
+    # Gewichte pro Indikator (Summe = 1.00)
+    weights = {
+        "yield curve (10y–2y)": 0.20,
+        "us high yield spread": 0.15,
+        "us dollar index (dxy)": 0.10,
+        "ust 10y yield": 0.10,
+        "vix (s&p 500 volatility)": 0.10,
+        "reverse repo ($bn)": 0.10,
+        "s&p 500 structure (ma50 vs ma200)": 0.10,
+        "wti crude oil": 0.08,
+        "gold futures (gc=f)": 0.07,
+    }
+
+    def norm_name(n: str) -> str:
+        return n.strip().lower()
+
+    total = 0.0
+    parts: Dict[str, float] = {}
+
+    for i in indicators:
+        n = norm_name(i.name)
+        # Falls sich der exakte Name mal ändert: sanfter Fallback per Teilstring
+        # (nur wenn kein exakter Treffer vorhanden ist)
+        w = weights.get(n)
+        if w is None:
+            if "yield curve" in n and "10y" in n:
+                w = weights["yield curve (10y–2y)"]
+            elif "high yield" in n:
+                w = weights["us high yield spread"]
+            elif "dollar index" in n or "dxy" in n:
+                w = weights["us dollar index (dxy)"]
+            elif "ust 10y" in n or ("10y" in n and "yield" in n):
+                w = weights["ust 10y yield"]
+            elif "vix" in n:
+                w = weights["vix (s&p 500 volatility)"]
+            elif "reverse repo" in n:
+                w = weights["reverse repo ($bn)"]
+            elif "structure" in n or ("ma50" in n and "ma200" in n) or "s&p 500" in n:
+                w = weights["s&p 500 structure (ma50 vs ma200)"]
+            elif "wti" in n or "crude" in n or "oil" in n:
+                w = weights["wti crude oil"]
+            elif "gold" in n:
+                w = weights["gold futures (gc=f)"]
+            else:
+                w = 0.0  # unbekannt -> kein Beitrag
+
+        s01 = status_to_score(i.status)  # 0..1
+        contrib = 100.0 * w * s01
+        parts[i.name] = r2(contrib)
+        total += contrib
+
+    return r2(total), parts
+
+# ----------------- Main -----------------
 
 def main():
-    import pandas as pd
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", default="config.yaml")
-    ap.add_argument("--fallback", default="fallback_values.yaml")
-    ap.add_argument("--out", default="out")
-    ap.add_argument("--use-fred", action="store_true")
-    ap.add_argument("--use-yf", action="store_true")
+    ap.add_argument("--use-fred", action="store_true", help="FRED aktivieren")
+    ap.add_argument("--use-yf", action="store_true", help="Yahoo Finance aktivieren")
+    ap.add_argument("--out", type=str, default="out", help="Output-Ordner")
     args = ap.parse_args()
 
     ensure_dir(args.out)
-    cfg = load_yaml(args.config)
-    fallback_vals = read_local_fallback(args.fallback)
 
-    indicators = build_indicators(cfg, args.use_fred, args.use_yf, fallback_vals)
-    total_score, parts = compute_shock_score(indicators, cfg)
+    # (Optional) Hier könnte ein YAML-Config geladen werden — wir nutzen Defaults:
+    cfg: Dict[str, Any] = DEFAULT_CFG
+
+    indicators = build_indicators(args.use_fred, args.use_yf, cfg)
+    total_score, parts = compute_shock_score(indicators)
 
     now = datetime.now(ZoneInfo("Europe/Berlin")).strftime("%Y-%m-%d %H:%M %Z")
+
+    # JSON
     report = {
         "as_of": now,
         "total_score": total_score,
         "score_parts": parts,
-        "indicators": [asdict(i) for i in indicators],
+        "indicators": [
+            {
+                **asdict(i),
+                "display_value": fmt2(i.value, f" {i.unit}" if i.unit else ""),
+            }
+            for i in indicators
+        ],
     }
 
     json_path = os.path.join(args.out, "shock_dashboard.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
 
-    rows = []
-    for i in indicators:
-        rows.append({
-            "as_of": now,
-            "indicator": i.name,
-            "value": i.value,
-            "unit": i.unit,
-            "status": i.status,
-            "comment": i.comment
-        })
-    df = pd.DataFrame(rows)
-    csv_path = os.path.join(args.out, "shock_dashboard.csv")
-    df.to_csv(csv_path, index=False)
-
-    md_lines = []
+    # Markdown
+    md_lines: List[str] = []
     md_lines.append(f"# Shock Dashboard — {now}")
-    md_lines.append(f"**Total Shock Score:** {total_score}/100\n")
+    md_lines.append(f"**Total Shock Score:** {fmt2(total_score)}/100\n")
     md_lines.append("## Indicators")
     for i in indicators:
-        md_lines.append(f"- {status_emoji(i.status)} **{i.name}**: {i.value} {i.unit} — {i.comment}")
+        md_lines.append(
+            f"- {status_emoji(i.status)} **{i.name}**: {fmt2(i.value)} {i.unit} — {i.comment}"
+        )
     md_lines.append("\n## Score by Bucket")
     for k, v in parts.items():
-        md_lines.append(f"- **{k}**: {round(v*100,2)}")
-    md = "\n".join(md_lines)
+        md_lines.append(f"- **{k}**: {fmt2(v)}")
+
     md_path = os.path.join(args.out, "shock_dashboard.md")
     with open(md_path, "w", encoding="utf-8") as f:
-        f.write(md)
+        f.write("\n".join(md_lines))
 
-    print(f"Saved:\n- {json_path}\n- {csv_path}\n- {md_path}")
+    print("Saved:")
+    print(" ", json_path)
+    print(" ", md_path)
 
 if __name__ == "__main__":
     main()

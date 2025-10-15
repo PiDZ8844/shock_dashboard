@@ -1,0 +1,28 @@
+──────────────────────────────
+🕒 Start Shock Dashboard: 2025-10-15_22-12
+──────────────────────────────
+Starte Dashboard mit Live-Daten…
+/Users/pien/Dokumente/shock_dashboard/.venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+Saved:
+- out/shock_dashboard.json
+- out/shock_dashboard.csv
+- out/shock_dashboard.md
+
+────────  Shock Dashboard (Kurzfassung)  ────────
+Total Shock Score: 30.42/100
+
+🟢  Yield Curve (10Y-2Y)                0.5299999999999998 %
+🟢  US Dollar Index (DXY)               98.7040023803711 
+🟡  UST 10Y Yield                       4.05 %
+🟠  UST 30Y Yield                       4.63 %
+🟡  VIX (S&P 500 Volatility)            20.709999084472656 
+🟢  US High Yield Spread                3.11 %
+🔴  Reverse Repo ($bn)                  5.484 bn
+🟢  S&P 500 Structure (MA50 vs MA200)   492.7756445312498 pts
+🟢  WTI Crude Oil                       58.47999954223633 USD/bbl
+🔴  Gold Futures (GC=F)                 4227.89990234375 USD/oz
+🔴  Silver Futures (SI=F)               52.564998626708984 USD/oz
+──────────────────────────────────────────────────
+✅ Log gespeichert in: logs/run_2025-10-15_22-12.log
+Fenster schließen mit Taste…

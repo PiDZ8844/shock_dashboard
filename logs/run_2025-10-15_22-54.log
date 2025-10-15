@@ -1,0 +1,9 @@
+──────────────────────────────
+🕒 Start Shock Dashboard: 2025-10-15_22-54
+──────────────────────────────
+Starte Dashboard mit Live-Daten…
+  File "/Users/pien/Dokumente/shock_dashboard/shock_dashboard.py", line 323
+    json_path = os.path.join(args.out, "shock_dashboard.json")
+IndentationError: unexpected indent
+❌ Fehler beim Ausführen von shock_dashboard.py
+✅ Log gespeichert in: logs/run_2025-10-15_22-54.log

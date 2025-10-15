@@ -1,0 +1,16 @@
+──────────────────────────────
+🕒 Start Shock Dashboard: 2025-10-15_23-09
+──────────────────────────────
+Starte Dashboard mit Live-Daten…
+/Users/pien/Dokumente/shock_dashboard/.venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+Traceback (most recent call last):
+  File "/Users/pien/Dokumente/shock_dashboard/shock_dashboard.py", line 434, in <module>
+    main()
+  File "/Users/pien/Dokumente/shock_dashboard/shock_dashboard.py", line 390, in main
+    indicators = build_indicators(use_fred=args.use_fred, use_yf=args.use_yf, cfg=cfg)
+  File "/Users/pien/Dokumente/shock_dashboard/shock_dashboard.py", line 228, in build_indicators
+    yc_status = classify_by_limits(yc_val, cfg["thresholds"]["yc_10y2y"], higher_is_worse=False)
+KeyError: 'yc_10y2y'
+❌ Fehler beim Ausführen von shock_dashboard.py
+✅ Log gespeichert in: logs/run_2025-10-15_23-09.log

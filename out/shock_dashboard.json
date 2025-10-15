@@ -1,93 +1,89 @@
 {
-  "as_of": "2025-10-15 19:39 CEST",
-  "total_score": 30.42,
+  "as_of": "2025-10-16 00:24 CEST",
+  "total_score": 37.6,
   "score_parts": {
-    "bonds": 0.10416666666666667,
-    "fx": 0.0,
-    "vol": 0.05,
-    "credit": 0.0,
-    "liquidity": 0.1,
-    "equity": 0.0,
-    "commod": 0.0,
-    "alts": 0.05
+    "Yield Curve (10Y–2Y)": 4.0,
+    "US Dollar Index (DXY)": 2.0,
+    "UST 10Y Yield": 5.0,
+    "VIX (S&P 500 Volatility)": 5.0,
+    "US High Yield Spread": 3.0,
+    "Reverse Repo ($bn)": 8.0,
+    "S&P 500 Structure (MA50 vs MA200)": 2.0,
+    "WTI Crude Oil": 1.6,
+    "Gold Futures (GC=F)": 7.0
   },
   "indicators": [
     {
-      "name": "Yield Curve (10Y-2Y)",
-      "value": 0.5299999999999998,
+      "name": "Yield Curve (10Y–2Y)",
+      "value": 0.55,
       "unit": "%",
       "comment": "Positive = normal, negative = inversion",
-      "status": "green"
+      "status": "green",
+      "display_value": "0.55 %"
     },
     {
       "name": "US Dollar Index (DXY)",
-      "value": 98.802001953125,
+      "value": 98.67,
       "unit": "",
       "comment": "Starker USD belastet Risikoassets",
-      "status": "green"
+      "status": "green",
+      "display_value": "98.67"
     },
     {
       "name": "UST 10Y Yield",
-      "value": 4.05,
+      "value": 4.03,
       "unit": "%",
       "comment": "Hohe Renditen drücken Bewertungen",
-      "status": "yellow"
-    },
-    {
-      "name": "UST 30Y Yield",
-      "value": 4.63,
-      "unit": "%",
-      "comment": "Langfristvertrauen / Duration-Risiko",
-      "status": "orange"
+      "status": "yellow",
+      "display_value": "4.03 %"
     },
     {
       "name": "VIX (S&P 500 Volatility)",
-      "value": 21.739999771118164,
+      "value": 20.64,
       "unit": "",
       "comment": "Angstbarometer",
-      "status": "yellow"
+      "status": "yellow",
+      "display_value": "20.64"
     },
     {
       "name": "US High Yield Spread",
       "value": 3.11,
       "unit": "%",
       "comment": "Kreditstress",
-      "status": "green"
+      "status": "green",
+      "display_value": "3.11 %"
     },
     {
       "name": "Reverse Repo ($bn)",
-      "value": 3.516,
+      "value": 5.48,
       "unit": "bn",
       "comment": "Liquiditätsparkplatz; starker Rückgang = Abzug",
-      "status": "red"
+      "status": "orange",
+      "display_value": "5.48 bn"
     },
     {
       "name": "S&P 500 Structure (MA50 vs MA200)",
-      "value": 492.39599365234426,
+      "value": 492.78,
       "unit": "pts",
       "comment": "Death Cross < 0",
-      "status": "green"
+      "status": "green",
+      "display_value": "492.78 pts"
     },
     {
       "name": "WTI Crude Oil",
-      "value": 58.31999969482422,
+      "value": 58.78,
       "unit": "USD/bbl",
       "comment": "Inflations-/Geopolitik-Barometer",
-      "status": "green"
+      "status": "green",
+      "display_value": "58.78 USD/bbl"
     },
     {
       "name": "Gold Futures (GC=F)",
-      "value": 4199.89990234375,
+      "value": 4222.2,
       "unit": "USD/oz",
       "comment": "Safe haven proxy",
-      "status": "red"
-    },
-    {
-      "name": "Silver Futures (SI=F)",
-      "value": 51.36000061035156,
-      "unit": "USD/oz",
-      "comment": "Industrial+safe haven",
-      "status": "red"
+      "status": "red",
+      "display_value": "4222.20 USD/oz"
     }
   ]
 }
