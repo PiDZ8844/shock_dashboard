@@ -1,0 +1,5 @@
+yfinance
+requests
+pandas
+pyyaml
+python-dotenv
